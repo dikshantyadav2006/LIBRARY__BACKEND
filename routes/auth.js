@@ -109,12 +109,18 @@ router.post("/login", async (req, res) => {
 
     // console.log("JWT Token generated");
 
-    // 🍪 Store token in HTTP-only cookie
-    res.cookie("authToken", token, { httpOnly: true, secure: false }).json({
+    
+    res.cookie("authToken", token, {
+      httpOnly: true,
+      secure: true, // Required for HTTPS (Render or any other production server)
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      // sameSite: "strict", // Optional but good for security
+    }).json({
       message: "Login successful",
       token,
       user: { id: user._id, username: user.username, mobile: user.mobile },
     });
+    
 
     console.log("User logged in successfully");
 
