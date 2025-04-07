@@ -112,9 +112,9 @@ router.post("/login", async (req, res) => {
     
     res.cookie("authToken", token, {
       httpOnly: true,
-      secure: true, // Required for HTTPS (Render or any other production server)
+      secure: true, // Required for HTTPS
+      sameSite: "None", // THIS IS CRUCIAL for cross-origin cookies
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      // sameSite: "strict", // Optional but good for security
     }).json({
       message: "Login successful",
       token,
