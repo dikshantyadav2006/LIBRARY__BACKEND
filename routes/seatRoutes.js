@@ -1,5 +1,6 @@
 import express from "express";
 import { getAllSeats, getSeatDetails, assignSeat, releaseSeat } from "../controllers/seatController.js";
+import { verifyAdmin } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ router.get("/", getAllSeats);
 router.get("/:seatNumber", getSeatDetails);
 
 // ✅ Assign a seat to a student
-router.post("/assign", assignSeat);
+router.post("/assign", verifyAdmin, assignSeat);
 
 // ✅ Manually release a seat (admin only)
 router.post("/release", releaseSeat);

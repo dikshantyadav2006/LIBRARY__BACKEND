@@ -66,7 +66,7 @@ router.get("/find-username/:username", verifyUser, async (req, res) => {
 });
 
 // 📌 Update user details
-router.put("/user/:id", verifyUser, async (req, res) => {
+router.put("/edit-user/:id", verifyUser, async (req, res) => {
   try {
     const { fullname, mobile, bio, gender, gmail, address,username, showProfilePicture } = req.body;
 
@@ -88,7 +88,13 @@ router.put("/user/:id", verifyUser, async (req, res) => {
     await user.save();
 
 
-    res.json({ message: "User updated successfully!", user });
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.__v;
+    delete userObj.profilePic;
+
+res.json({ message: "User updated successfully!", user: userObj });
+
   } catch (error) {
     console.error("Error updating user:", error);
     res.status(500).json({ message: "Failed to update user" });

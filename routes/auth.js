@@ -11,7 +11,7 @@ const router = express.Router();
 // ✅ Fetch user data using ID from cookie
 router.get("/userdata", verifyUser, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
+    const user = await User.findById(req.user.id).select("-password -profilePic -__v"); // Exclude password and profilePic fields
     // console.log(user); // Exclude password field
     if (!user) {
       return res.status(404).json({ message: "User not found" });

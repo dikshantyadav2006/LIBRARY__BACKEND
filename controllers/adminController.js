@@ -51,6 +51,7 @@ export const addStudent = async (req, res) => {
 
     const newStudent = new Student({ userId: userId, addedBy: adminId });
     await newStudent.save();
+    
 
     return res.status(201).json({ success: true, message: "Student added successfully!" });
   } catch (error) {

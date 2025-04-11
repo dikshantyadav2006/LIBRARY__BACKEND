@@ -4,7 +4,6 @@ import User from "../models/User.js";
 export const verifyUser = (req, res, next) => {
   const token = req.cookies.authToken;
   
-  
   if (!token) {
     return res.status(401).json({ message: "Unauthorized, please log in" });
   }
