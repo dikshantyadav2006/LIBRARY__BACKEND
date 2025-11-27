@@ -15,6 +15,8 @@ import seatRoutes from "./routes/seatRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
+import paymentRoutes from "./routes/paymentRoutes.js";
+import monthlyBookingRoutes from "./routes/monthlyBookingRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -69,6 +71,8 @@ app.use("/seat", seatRoutes);
 app.use("/student", studentRoutes);
 app.use("/user", userRoutes);
 app.use("/feedback", feedbackRoutes);
+app.use("/payment", paymentRoutes);
+app.use("/monthly-booking", monthlyBookingRoutes);
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGO_URI;

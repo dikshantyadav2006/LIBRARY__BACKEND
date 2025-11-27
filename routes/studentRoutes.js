@@ -1,13 +1,10 @@
 import express from "express";
-import {  getStudentDetails } from "../controllers/studentController.js";
 import upload from "../middleware/multerConfig.js"; // Import multer
 import User from "../models/User.js"; // Import User model
 
 const router = express.Router();
 
-// ✅ Get all seats
-router.get("/:studentId", getStudentDetails);
-
+// Profile picture upload
 router.post("/upload-profile/:userId", upload.single("profilePic"), async (req, res) => {
   try {
     const { userId } = req.params;

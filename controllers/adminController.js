@@ -1,12 +1,10 @@
 import User from "../models/User.js";
-import Student from "../models/Student.js";
+import MonthlyBooking from "../models/MonthlyBooking.js";
 
 // Fetch all users
-
 export const getAllUsers = async (req, res) => {
   try {
     const users = await User.find({}, "username mobile isAdmin fullname");
-
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
@@ -18,46 +16,74 @@ export const getUserDetails = async (req, res) => {
   try {
     const user = await User.findById(req.params._id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
-
-    const student = await Student.findOne({ userId: user._id });
-
-    res.json({ user, student });
+    res.json({ user });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
 
-
-
-
-
-export const addStudent = async (req, res) => {
+// Block seat shifts (Admin only)
+export const blockSeat = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const adminId = req.user.id; // Ensure `req.user` contains the admin ID
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required tooo." });
+    const { seatNumber, shiftTypes, month, year } = req.body;
+
+    if (!seatNumber || !Array.isArray(shiftTypes) || shiftTypes.length === 0) {
+      return res.status(400).json({ message: "seatNumber and shiftTypes array are required" });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found." });
+    if (!month || !year) {
+      return res.status(400).json({ message: "Month and year are required" });
     }
 
-    const existingStudent = await Student.findOne({ userId: userId });
-    if (existingStudent) {
-      return res.status(400).json({ success: false, message: "User is already a student." });
-    }
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
 
-    const newStudent = new Student({ userId: userId, addedBy: adminId });
-    await newStudent.save();
-    
+    // Get or create the booking record
+    const booking = await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
 
-    return res.status(201).json({ success: true, message: "Student added successfully!" });
+    // Block the shifts
+    await booking.setBlockStatus(shiftTypes, true);
+
+    return res.status(200).json({
+      success: true,
+      message: `Seat ${seatNumber} shifts [${shiftTypes.join(", ")}] blocked for ${monthNum}/${yearNum}`,
+      booking,
+    });
   } catch (error) {
-    console.error("Error adding student:", error);
-    res.status(500).json({ success: false, message: "Server error." });
+    console.error("Error blocking seat:", error);
+    return res.status(500).json({ message: error.message || "Error blocking seat" });
   }
 };
 
+// Unblock seat shifts (Admin only)
+export const unblockSeat = async (req, res) => {
+  try {
+    const { seatNumber, shiftTypes, month, year } = req.body;
 
+    if (!seatNumber || !Array.isArray(shiftTypes) || shiftTypes.length === 0) {
+      return res.status(400).json({ message: "seatNumber and shiftTypes array are required" });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({ message: "Month and year are required" });
+    }
+
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    // Get or create the booking record
+    const booking = await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
+
+    // Unblock the shifts
+    await booking.setBlockStatus(shiftTypes, false);
+
+    return res.status(200).json({
+      success: true,
+      message: `Seat ${seatNumber} shifts [${shiftTypes.join(", ")}] unblocked for ${monthNum}/${yearNum}`,
+      booking,
+    });
+  } catch (error) {
+    console.error("Error unblocking seat:", error);
+    return res.status(500).json({ message: error.message || "Error unblocking seat" });
+  }
+};

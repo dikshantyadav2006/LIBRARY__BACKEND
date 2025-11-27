@@ -8,7 +8,6 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     isAdmin: { type: Boolean, default: false },
     bio: { type: String, default: "No bio available" },
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
 
     // ===================================================>> posts
     // 
