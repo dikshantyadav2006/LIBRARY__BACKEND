@@ -7,6 +7,10 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import http from "http";
 import { Server as SocketServer } from "socket.io";
+import passport from "passport";
+
+// Passport Configuration
+import configurePassport from "./config/passport.js";
 
 // Routes
 import authRoutes from "./routes/auth.js";
@@ -20,6 +24,9 @@ import monthlyBookingRoutes from "./routes/monthlyBookingRoutes.js";
 
 // Load environment variables
 dotenv.config();
+
+// Initialize Passport with Google OAuth strategy
+configurePassport();
 
 // Express app setup
 const app = express();
@@ -57,6 +64,9 @@ app.use(
   })
 );
 app.use(cookieParser());
+
+// Initialize Passport middleware
+app.use(passport.initialize());
 
 // Attach socket.io to requests
 app.use((req, res, next) => {

@@ -4,9 +4,14 @@ const userSchema = new mongoose.Schema(
   {
     fullname: { type: String, required: true },
     username: { type: String, unique: true, required: true },
-    mobile: { type: String, unique: true, required: true }, // edit only by admin
-    password: { type: String, required: true },
+    mobile: { type: String, unique: true, sparse: true, default: null }, // edit only by admin
+    password: { type: String, required: false }, // Optional for OAuth users
     isAdmin: { type: Boolean, default: false },
+
+    // Google OAuth fields
+    googleId: { type: String, unique: true, sparse: true, default: null },
+    authProvider: { type: String, enum: ["local", "google"], default: "local" },
+    profileCompleted: { type: Boolean, default: true }, // false for new OAuth users until they set username/mobile
     bio: { type: String, default: "No bio available" },
 
     // ===================================================>> posts

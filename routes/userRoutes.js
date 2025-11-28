@@ -101,4 +101,69 @@ res.json({ message: "User updated successfully!", user: userObj });
   }
 });
 
+// 📌 Complete profile for OAuth users (set username and mobile)
+router.put("/complete-profile", verifyUser, async (req, res) => {
+  try {
+    const { username, mobile } = req.body;
+    const userId = req.user.id;
+
+    // Validate required fields
+    if (!username || !mobile) {
+      return res.status(400).json({ message: "Username and mobile are required" });
+    }
+
+    // Validate username format (min 6 chars, alphanumeric + special chars)
+    if (!/^[A-Za-z0-9!@#$%^&*(.)_+]{6,}$/.test(username)) {
+      return res.status(400).json({
+        message: "Username must be at least 6 characters (A-Z, 0-9, special characters allowed)"
+      });
+    }
+
+    // Validate mobile format (10 digits)
+    if (!/^\d{10}$/.test(mobile)) {
+      return res.status(400).json({ message: "Mobile number must be exactly 10 digits" });
+    }
+
+    // Check if username already exists (excluding current user)
+    const existingUsername = await User.findOne({ username, _id: { $ne: userId } });
+    if (existingUsername) {
+      return res.status(400).json({ message: "Username already taken" });
+    }
+
+    // Check if mobile already exists (excluding current user)
+    const existingMobile = await User.findOne({ mobile, _id: { $ne: userId } });
+    if (existingMobile) {
+      return res.status(400).json({ message: "Mobile number already registered" });
+    }
+
+    // Find and update user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.username = username;
+    user.mobile = mobile;
+    user.profileCompleted = true;
+
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.__v;
+    delete userObj.profilePic;
+
+    console.log("✅ Profile completed for:", user.fullname);
+
+    res.json({
+      message: "Profile completed successfully!",
+      user: userObj
+    });
+
+  } catch (error) {
+    console.error("Error completing profile:", error);
+    res.status(500).json({ message: "Failed to complete profile" });
+  }
+});
+
 export default router;

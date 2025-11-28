@@ -1,10 +1,14 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import passport from "passport";
 import User from "../models/User.js";
 import { verifyUser } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+// Frontend URL for redirects
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 
 
@@ -155,6 +159,72 @@ router.post("/logout", verifyUser, (req, res) => {
     console.error("Logout Error:", error.message);
     res.status(500).json({ message: "Server Error during logout", error: error.message });
   }
+});
+
+// =====================================================
+// 🔐 GOOGLE OAUTH ROUTES
+// =====================================================
+
+// Initiate Google OAuth
+router.get("/google", passport.authenticate("google", {
+  scope: ["profile", "email"],
+}));
+
+// Google OAuth Callback
+router.get("/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: `${FRONTEND_URL}/login?error=google_auth_failed`,
+    session: false
+  }),
+  async (req, res) => {
+    try {
+      const user = req.user;
+
+      if (!user) {
+        return res.redirect(`${FRONTEND_URL}/login?error=no_user`);
+      }
+
+      // Generate JWT Token for the OAuth user
+      const token = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      // Set the auth cookie
+      res.cookie("authToken", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+
+      console.log("✅ Google OAuth successful for:", user.fullname);
+
+      // Redirect based on profile completion status
+      if (!user.profileCompleted) {
+        // New OAuth user - redirect to complete profile page
+        console.log("📝 Redirecting to complete profile page");
+        res.redirect(`${FRONTEND_URL}/complete-profile`);
+      } else {
+        // Existing user with completed profile - redirect to dashboard
+        res.redirect(`${FRONTEND_URL}/dashboard`);
+      }
+
+    } catch (error) {
+      console.error("❌ Google OAuth Callback Error:", error);
+      res.redirect(`${FRONTEND_URL}/login?error=auth_error`);
+    }
+  }
+);
+
+// Check if Google Auth is configured
+router.get("/google/status", (req, res) => {
+  const isConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  res.json({
+    googleAuthEnabled: isConfigured,
+    message: isConfigured ? "Google OAuth is configured" : "Google OAuth is not configured"
+  });
 });
 
 export default router;
