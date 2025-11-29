@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema(
   {
     fullname: { type: String, required: true },
     username: { type: String, unique: true, required: true },
-    mobile: { type: String, unique: true, sparse: true, default: null }, // edit only by admin
+    mobile: { type: String, sparse: true, default: null }, // edit only by admin
     password: { type: String, required: false }, // Optional for OAuth users
     isAdmin: { type: Boolean, default: false },
 
