@@ -4,7 +4,7 @@ import Payment from "../models/Payment.js";
 import MonthlyBooking from "../models/MonthlyBooking.js";
 
 const SHIFT_PRICE_INR = 300; // ₹300 per shift (full month)
-const MIN_PRICE_INR = 99; // Minimum price ₹99
+const MIN_PRICE_INR = 50; // Minimum price ₹50
 const CURRENCY = "INR";
 
 const getRazorpayInstance = () => {
@@ -19,14 +19,27 @@ const getRazorpayInstance = () => {
 };
 
 // Calculate pro-rated price for current month based on remaining days
-const calculateProRatedPrice = (shiftCount, month, year) => {
+// Special handling: Day+Night combo on Floor 1 = ₹600 (Night is free)
+const calculateProRatedPrice = (shiftCount, month, year, shiftTypes = [], seatNumber = null) => {
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
   const currentYear = now.getFullYear();
 
+  // Check if this is Day+Night combo on Floor 1 (seats 1-25)
+  const isFloor1 = seatNumber && seatNumber <= 25;
+  const hasDay = shiftTypes.includes("morning") && shiftTypes.includes("afternoon");
+  const hasNight = shiftTypes.includes("night");
+  const isDayNightCombo = isFloor1 && hasDay && hasNight;
+
+  // For Day+Night combo, treat as 2 shifts (Day only) - Night is free
+  let effectiveShiftCount = shiftCount;
+  if (isDayNightCombo) {
+    effectiveShiftCount = 2; // Day shift (morning + afternoon) = 2 shifts
+  }
+
   // If not current month, return full price
   if (month !== currentMonth || year !== currentYear) {
-    return shiftCount * SHIFT_PRICE_INR;
+    return effectiveShiftCount * SHIFT_PRICE_INR;
   }
 
   // Calculate remaining days in current month
@@ -40,7 +53,7 @@ const calculateProRatedPrice = (shiftCount, month, year) => {
   // Ensure minimum price per shift
   const finalPricePerShift = Math.max(pricePerShift, MIN_PRICE_INR);
 
-  return shiftCount * finalPricePerShift;
+  return effectiveShiftCount * finalPricePerShift;
 };
 
 // Create Razorpay order and a corresponding Payment document (Monthly Booking)
@@ -75,8 +88,8 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // Calculate pro-rated price for current month
-    const amountINR = calculateProRatedPrice(shiftTypes.length, monthNum, yearNum);
+    // Calculate pro-rated price for current month (with Day+Night combo discount)
+    const amountINR = calculateProRatedPrice(shiftTypes.length, monthNum, yearNum, shiftTypes, seatNumber);
     const amountInPaise = amountINR * 100; // Razorpay uses paise
 
     const razorpay = getRazorpayInstance();
@@ -233,7 +246,7 @@ export const verifyPayment = async (req, res) => {
 // Get calculated price for shifts (for frontend display)
 export const getPrice = async (req, res) => {
   try {
-    const { shiftCount, month, year } = req.query;
+    const { shiftCount, month, year, shiftTypes, seatNumber } = req.query;
 
     if (!shiftCount || !month || !year) {
       return res.status(400).json({ message: "shiftCount, month, and year are required" });
@@ -243,8 +256,28 @@ export const getPrice = async (req, res) => {
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
 
-    const totalPrice = calculateProRatedPrice(shifts, monthNum, yearNum);
-    const fullPrice = shifts * SHIFT_PRICE_INR;
+    // Parse shiftTypes if provided
+    let parsedShiftTypes = [];
+    if (shiftTypes) {
+      try {
+        parsedShiftTypes = JSON.parse(decodeURIComponent(shiftTypes));
+      } catch {
+        // If not JSON, try as comma-separated string
+        parsedShiftTypes = shiftTypes.split(",").map(s => s.trim());
+      }
+    }
+
+    const parsedSeatNumber = seatNumber ? parseInt(seatNumber) : null;
+
+    const totalPrice = calculateProRatedPrice(shifts, monthNum, yearNum, parsedShiftTypes, parsedSeatNumber);
+    
+    // Calculate full price with same logic
+    const isFloor1 = parsedSeatNumber && parsedSeatNumber <= 25;
+    const hasDay = parsedShiftTypes.includes("morning") && parsedShiftTypes.includes("afternoon");
+    const hasNight = parsedShiftTypes.includes("night");
+    const isDayNightCombo = isFloor1 && hasDay && hasNight;
+    const effectiveShiftCount = isDayNightCombo ? 2 : shifts;
+    const fullPrice = effectiveShiftCount * SHIFT_PRICE_INR;
 
     const now = new Date();
     const isCurrentMonth = monthNum === (now.getMonth() + 1) && yearNum === now.getFullYear();
