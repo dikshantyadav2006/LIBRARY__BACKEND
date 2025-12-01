@@ -218,7 +218,16 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "One or more shifts are no longer available" });
     }
 
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
     // Create booking using Booking model
+    let autoProtected = false;
+    let nextMonth = null;
+    let nextYear = null;
+    
     try {
       await Booking.createBooking(
         payment.seatNumber,
@@ -236,6 +245,59 @@ export const verifyPayment = async (req, res) => {
         payment.bookingYear,
         payment.shiftTypes
       );
+
+      // Automatic protection: Protect the same seat with same shifts for next month if available
+      nextMonth = payment.bookingMonth + 1;
+      nextYear = payment.bookingYear;
+      if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear = payment.bookingYear + 1;
+      }
+
+      // Check if the same seat with same shifts is available in the next month
+      const isNextMonthAvailable = await areShiftsAvailable(
+        payment.seatNumber,
+        nextMonth,
+        nextYear,
+        payment.shiftTypes,
+        userId
+      );
+
+      if (isNextMonthAvailable) {
+        // Get or create booking container for next month
+        await MonthlyBooking.getOrCreateForMonth(
+          payment.seatNumber,
+          nextMonth,
+          nextYear
+        );
+
+        // Create protection for next month
+        // Protection expires on Day 3 of the next month at 23:59:59
+        const expirationDate = new Date(nextYear, nextMonth - 1, 3, 23, 59, 59);
+
+        // Remove any existing protections for these shifts (to update)
+        await ProtectedSeat.deleteMany({
+          seatNumber: payment.seatNumber,
+          month: nextMonth,
+          year: nextYear,
+          shiftTypes: { $in: payment.shiftTypes },
+          userId: userId,
+        });
+
+        // Create new protections for each shift
+        for (const shiftType of payment.shiftTypes) {
+          const protection = new ProtectedSeat({
+            seatNumber: payment.seatNumber,
+            month: nextMonth,
+            year: nextYear,
+            shiftTypes: [shiftType],
+            userId: userId,
+            protectionExpiresAt: expirationDate,
+          });
+          await protection.save();
+        }
+        autoProtected = true;
+      }
     } catch (err) {
       payment.status = "failed";
       payment.failureReason = `Booking error: ${err.message}`;
@@ -249,19 +311,22 @@ export const verifyPayment = async (req, res) => {
     payment.paidAt = new Date();
     await payment.save();
 
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
+    // Build response message
+    let message = "Payment verified and seat booked successfully";
+    if (autoProtected) {
+      message += `. Your seat has been automatically protected for ${monthNames[nextMonth - 1]} ${nextYear}. You must complete payment by Day 3, or the protection will expire.`;
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Payment verified and seat booked successfully",
+      message: message,
       seatNumber: payment.seatNumber,
       shiftTypes: payment.shiftTypes,
       month: payment.bookingMonth,
       year: payment.bookingYear,
       monthLabel: `${monthNames[payment.bookingMonth - 1]} ${payment.bookingYear}`,
+      autoProtected: autoProtected,
+      protectedMonth: autoProtected ? `${monthNames[nextMonth - 1]} ${nextYear}` : null,
     });
   } catch (error) {
     console.error("Error verifying payment:", error);

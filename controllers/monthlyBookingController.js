@@ -199,8 +199,8 @@ export const getProtectionStatus = async (req, res) => {
     const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
     const daysRemaining = daysInMonth - currentDay;
 
-    // Protection only allowed in last 3 days of month
-    const canProtect = daysRemaining <= 3;
+    // Manual protection can be done anytime (automatic protection handles immediate next month)
+    const canProtect = true;
 
     // Calculate next months available for protection (1-3 months)
     const protectionMonths = [];
@@ -274,19 +274,7 @@ export const protectSeat = async (req, res) => {
 
     const userShifts = currentBooking.shiftTypes;
 
-    // Check if within protection window (last 3 days of month)
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-    const daysRemaining = daysInMonth - now.getDate();
-
-    if (daysRemaining > 3) {
-      return res.status(400).json({
-        message: `Protection only available in last 3 days of the month. ${daysRemaining - 3} more days until protection window opens.`,
-      });
-    }
-
+    // Manual protection can be done anytime (automatic protection handles immediate next month)
     const protectedBookings = [];
 
     // Protect each requested month
