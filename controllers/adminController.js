@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import MonthlyBooking from "../models/MonthlyBooking.js";
+import BlockedSeat from "../models/BlockedSeat.js";
 
 // Fetch all users
 export const getAllUsers = async (req, res) => {
@@ -37,17 +38,17 @@ export const blockSeat = async (req, res) => {
 
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
+    const adminId = req.user.id; // Admin user ID
 
-    // Get or create the booking record
-    const booking = await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
+    // Get or create the booking container
+    await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
 
-    // Block the shifts
-    await booking.setBlockStatus(shiftTypes, true);
+    // Block the shifts using BlockedSeat model
+    await BlockedSeat.blockShifts(seatNumber, monthNum, yearNum, shiftTypes, adminId);
 
     return res.status(200).json({
       success: true,
       message: `Seat ${seatNumber} shifts [${shiftTypes.join(", ")}] blocked for ${monthNum}/${yearNum}`,
-      booking,
     });
   } catch (error) {
     console.error("Error blocking seat:", error);
@@ -71,16 +72,15 @@ export const unblockSeat = async (req, res) => {
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
 
-    // Get or create the booking record
-    const booking = await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
+    // Get or create the booking container
+    await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
 
-    // Unblock the shifts
-    await booking.setBlockStatus(shiftTypes, false);
+    // Unblock the shifts using BlockedSeat model
+    await BlockedSeat.unblockShifts(seatNumber, monthNum, yearNum, shiftTypes);
 
     return res.status(200).json({
       success: true,
       message: `Seat ${seatNumber} shifts [${shiftTypes.join(", ")}] unblocked for ${monthNum}/${yearNum}`,
-      booking,
     });
   } catch (error) {
     console.error("Error unblocking seat:", error);

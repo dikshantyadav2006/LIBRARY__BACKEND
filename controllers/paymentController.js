@@ -2,6 +2,9 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import Payment from "../models/Payment.js";
 import MonthlyBooking from "../models/MonthlyBooking.js";
+import Booking from "../models/Booking.js";
+import ProtectedSeat from "../models/ProtectedSeat.js";
+import { areShiftsAvailable } from "../services/seatAvailabilityService.js";
 
 const SHIFT_PRICE_INR = 300; // ₹300 per shift (full month)
 const MIN_PRICE_INR = 50; // Minimum price ₹50
@@ -78,13 +81,14 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Month must be between 1 and 12" });
     }
 
-    // Get or create the monthly booking record
-    const booking = await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
+    // Get or create the monthly booking record (just a container)
+    await MonthlyBooking.getOrCreateForMonth(seatNumber, monthNum, yearNum);
 
-    // Ensure requested shifts are currently available for this month (pass userId for protected seat check)
-    if (!booking.areShiftsAvailable(shiftTypes, userId)) {
+    // Check availability using new models (pass userId to allow booking if user protected the seat)
+    const available = await areShiftsAvailable(seatNumber, monthNum, yearNum, shiftTypes, userId);
+    if (!available) {
       return res.status(400).json({
-        message: "One or more selected shifts are already booked or blocked for this month"
+        message: "One or more selected shifts are already booked, blocked, or protected by another user"
       });
     }
 
@@ -192,24 +196,46 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ message: "Payment verification failed" });
     }
 
-    // Get the monthly booking record
-    const booking = await MonthlyBooking.getOrCreateForMonth(
+    // Get or create the monthly booking record (just a container)
+    await MonthlyBooking.getOrCreateForMonth(
       payment.seatNumber,
       payment.bookingMonth,
       payment.bookingYear
     );
 
-    // Double-check availability before final booking
-    if (!booking.areShiftsAvailable(payment.shiftTypes)) {
+    // Double-check availability before final booking (pass userId to allow if user protected it)
+    const available = await areShiftsAvailable(
+      payment.seatNumber,
+      payment.bookingMonth,
+      payment.bookingYear,
+      payment.shiftTypes,
+      userId
+    );
+    if (!available) {
       payment.status = "failed";
-      payment.failureReason = "Shifts already booked during verification";
+      payment.failureReason = "Shifts already booked, blocked, or protected during verification";
       await payment.save();
-      return res.status(400).json({ message: "One or more shifts are already booked" });
+      return res.status(400).json({ message: "One or more shifts are no longer available" });
     }
 
-    // Book the shifts in the monthly booking
+    // Create booking using Booking model
     try {
-      await booking.bookShifts(payment.shiftTypes, userId, payment._id);
+      await Booking.createBooking(
+        payment.seatNumber,
+        payment.bookingMonth,
+        payment.bookingYear,
+        payment.shiftTypes,
+        userId,
+        payment._id
+      );
+
+      // Mark any protections as converted to booking
+      await ProtectedSeat.markAsConverted(
+        payment.seatNumber,
+        payment.bookingMonth,
+        payment.bookingYear,
+        payment.shiftTypes
+      );
     } catch (err) {
       payment.status = "failed";
       payment.failureReason = `Booking error: ${err.message}`;

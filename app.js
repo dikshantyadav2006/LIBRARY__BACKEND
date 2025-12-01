@@ -36,6 +36,7 @@ const server = http.createServer(app);
 const allowedOrigins = [
   "http://localhost:5173", // local dev
   "https://shai-library.vercel.app", // deployed frontend
+  "https://sai-library.vercel.app", // deployed frontend
 ];
 
 // Setup Socket.IO
@@ -48,10 +49,10 @@ const io = new SocketServer(server, {
 
 // Socket.IO connection
 io.on("connection", (socket) => {
-  console.log("🟢 A user connected:", socket.id);
+  // console.log("🟢 A user connected:", socket.id);
 
   socket.on("disconnect", () => {
-    console.log("🔴 A user disconnected:", socket.id);
+    // console.log("🔴 A user disconnected:", socket.id);
   });
 });
 

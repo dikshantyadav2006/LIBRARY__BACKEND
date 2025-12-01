@@ -1,5 +1,8 @@
 import MonthlyBooking from "../models/MonthlyBooking.js";
 import User from "../models/User.js";
+import Booking from "../models/Booking.js";
+import ProtectedSeat from "../models/ProtectedSeat.js";
+import { populateShiftData, populateShiftDataForMultiple, areShiftsAvailable } from "../services/seatAvailabilityService.js";
 
 const TOTAL_SEATS = 59; // Total seats: Floor 1 (1-25) + Floor 2 (26-59)
 
@@ -11,39 +14,32 @@ export const getUserBookings = async (req, res) => {
   try {
     const userId = req.user.id; // From JWT decoded token
 
-    // Find all bookings where any shift has this user's ID
-    const bookings = await MonthlyBooking.find({
-      "shifts.userId": userId,
-    }).sort({ year: -1, month: -1 }); // Sort by most recent first
+    // Find all bookings for this user using Booking model
+    const bookings = await Booking.find({
+      userId: userId,
+      status: "active",
+    })
+      .populate("paymentId")
+      .sort({ year: -1, month: -1 }); // Sort by most recent first
 
-    // Format the response - only include shifts booked by this user
-    const userBookings = bookings.map((booking) => {
-      const userShifts = booking.shifts.filter((shift) => {
-        if (!shift.userId) return false;
-        return shift.userId.toString() === userId;
-      });
-
-      return {
-        _id: booking._id,
-        seatNumber: booking.seatNumber,
-        month: booking.month,
-        year: booking.year,
-        shifts: userShifts.map((shift) => ({
-          shiftType: shift.shiftType,
-          bookedAt: shift.bookedAt,
-          status: shift.status,
-        })),
-        createdAt: booking.createdAt,
-      };
-    });
-
-    // Filter out bookings with no user shifts (edge case)
-    const filteredBookings = userBookings.filter((b) => b.shifts.length > 0);
+    // Format the response
+    const userBookings = bookings.map((booking) => ({
+      _id: booking._id,
+      seatNumber: booking.seatNumber,
+      month: booking.month,
+      year: booking.year,
+      shifts: booking.shiftTypes.map((shiftType) => ({
+        shiftType: shiftType,
+        bookedAt: booking.bookedAt,
+        status: "booked",
+      })),
+      createdAt: booking.createdAt,
+    }));
 
     return res.status(200).json({
       success: true,
-      totalBookings: filteredBookings.length,
-      bookings: filteredBookings,
+      totalBookings: userBookings.length,
+      bookings: userBookings,
     });
   } catch (error) {
     console.error("Error fetching user bookings:", error);
@@ -73,11 +69,14 @@ export const getSeatsForMonth = async (req, res) => {
     // Get all seats for this month (creates virtual seats if not in DB)
     const seats = await MonthlyBooking.getAllForMonth(monthNum, yearNum, TOTAL_SEATS);
 
+    // Populate shift data from Booking, ProtectedSeat, and BlockedSeat models
+    const seatsWithData = await populateShiftDataForMultiple(seats);
+
     return res.status(200).json({
       month: monthNum,
       year: yearNum,
       totalSeats: TOTAL_SEATS,
-      seats,
+      seats: seatsWithData,
     });
   } catch (error) {
     console.error("Error fetching seats for month:", error);
@@ -104,26 +103,14 @@ export const getSeatDetailsForMonth = async (req, res) => {
     // Get or create booking record
     const booking = await MonthlyBooking.getOrCreateForMonth(seatNum, monthNum, yearNum);
 
-    // Populate user details for booked shifts
-    const shiftsWithDetails = await Promise.all(
-      booking.shifts.map(async (shift) => {
-        if (!shift.userId) {
-          return { ...shift.toObject(), userDetails: null };
-        }
-
-        const user = await User.findById(shift.userId).select("fullname username");
-        return {
-          ...shift.toObject(),
-          userDetails: user ? { fullname: user.fullname, username: user.username } : null,
-        };
-      })
-    );
+    // Populate shift data from Booking, ProtectedSeat, and BlockedSeat models
+    const bookingWithData = await populateShiftData(booking);
 
     return res.status(200).json({
       seatNumber: seatNum,
       month: monthNum,
       year: yearNum,
-      shifts: shiftsWithDetails,
+      shifts: bookingWithData.shifts,
     });
   } catch (error) {
     console.error("Error fetching seat details:", error);
@@ -179,19 +166,17 @@ export const getProtectionStatus = async (req, res) => {
     const userId = req.user.id;
     const { bookingId } = req.params;
 
-    // Find the booking
-    const booking = await MonthlyBooking.findById(bookingId);
+    // Find the booking using Booking model
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      userId: userId,
+      status: "active",
+    });
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    // Check if user has booked shifts in this booking
-    const userShifts = booking.shifts.filter(
-      (s) => s.userId && s.userId.toString() === userId && s.status === "booked"
-    );
-    if (userShifts.length === 0) {
-      return res.status(403).json({ message: "You don't have any shifts booked for this seat" });
-    }
+    const userShifts = booking.shiftTypes;
 
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
@@ -250,7 +235,7 @@ export const getProtectionStatus = async (req, res) => {
         seatNumber: booking.seatNumber,
         month: booking.month,
         year: booking.year,
-        shifts: userShifts.map((s) => s.shiftType),
+        shifts: userShifts,
       },
       graceNote: "⚠️ After protection, you must complete payment by Day 3 of the new month, or the seat will be released.",
     });
@@ -277,19 +262,17 @@ export const protectSeat = async (req, res) => {
       return res.status(400).json({ message: "Maximum 3 months can be protected at once" });
     }
 
-    // Find the current booking
-    const currentBooking = await MonthlyBooking.findById(bookingId);
+    // Find the current booking using Booking model
+    const currentBooking = await Booking.findOne({
+      _id: bookingId,
+      userId: userId,
+      status: "active",
+    });
     if (!currentBooking) {
       return res.status(404).json({ message: "Booking not found" });
     }
 
-    // Check user has booked shifts
-    const userShifts = currentBooking.shifts.filter(
-      (s) => s.userId && s.userId.toString() === userId && s.status === "booked"
-    );
-    if (userShifts.length === 0) {
-      return res.status(403).json({ message: "You don't have any shifts booked for this seat" });
-    }
+    const userShifts = currentBooking.shiftTypes;
 
     // Check if within protection window (last 3 days of month)
     const now = new Date();
@@ -304,37 +287,64 @@ export const protectSeat = async (req, res) => {
       });
     }
 
-    const shiftTypes = userShifts.map((s) => s.shiftType);
     const protectedBookings = [];
 
     // Protect each requested month
     for (const monthData of months) {
       const { month, year } = monthData;
 
-      // Get or create booking for future month
-      const futureBooking = await MonthlyBooking.getOrCreateForMonth(
+      // Get or create booking container for future month
+      await MonthlyBooking.getOrCreateForMonth(
         currentBooking.seatNumber,
         month,
         year
       );
 
-      // Check if shifts are available for protection
-      const available = futureBooking.areShiftsAvailable(shiftTypes, userId);
+      // Check if shifts are available for protection using new models
+      const available = await areShiftsAvailable(
+        currentBooking.seatNumber,
+        month,
+        year,
+        userShifts,
+        userId
+      );
       if (!available) {
         return res.status(400).json({
-          message: `Seat ${currentBooking.seatNumber} is not available for ${month}/${year}. Some shifts may already be booked or protected.`,
+          message: `Seat ${currentBooking.seatNumber} is not available for ${month}/${year}. Some shifts may already be booked, blocked, or protected.`,
         });
       }
 
-      // Protect the shifts
-      await futureBooking.protectShifts(shiftTypes, userId);
+      // Create protection using ProtectedSeat model
+      const expirationDate = new Date(year, month - 1, 3, 23, 59, 59);
+      
+      // Remove any existing protections for these shifts (to update)
+      await ProtectedSeat.deleteMany({
+        seatNumber: currentBooking.seatNumber,
+        month,
+        year,
+        shiftTypes: { $in: userShifts },
+        userId: userId,
+      });
+
+      // Create new protections
+      for (const shiftType of userShifts) {
+        const protection = new ProtectedSeat({
+          seatNumber: currentBooking.seatNumber,
+          month,
+          year,
+          shiftTypes: [shiftType],
+          userId: userId,
+          protectionExpiresAt: expirationDate,
+        });
+        await protection.save();
+      }
 
       protectedBookings.push({
         seatNumber: currentBooking.seatNumber,
         month,
         year,
-        shifts: shiftTypes,
-        expiresAt: new Date(year, month - 1, 3, 23, 59, 59),
+        shifts: userShifts,
+        expiresAt: expirationDate,
       });
     }
 
@@ -355,7 +365,7 @@ export const protectSeat = async (req, res) => {
  */
 export const releaseExpiredProtections = async (req, res) => {
   try {
-    const result = await MonthlyBooking.releaseExpiredProtections();
+    const result = await ProtectedSeat.releaseExpiredProtections();
     return res.status(200).json({
       success: true,
       message: "Expired protections released",
