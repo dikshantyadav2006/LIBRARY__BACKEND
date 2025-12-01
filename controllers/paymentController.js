@@ -27,6 +27,7 @@ const calculateProRatedPrice = (shiftCount, month, year, shiftTypes = [], seatNu
   const now = new Date();
   const currentMonth = now.getMonth() + 1; // 1-12
   const currentYear = now.getFullYear();
+  const today = now.getDate();
 
   // Check if this is Day+Night combo on Floor 1 (seats 1-25)
   const isFloor1 = seatNumber && seatNumber <= 25;
@@ -40,13 +41,14 @@ const calculateProRatedPrice = (shiftCount, month, year, shiftTypes = [], seatNu
     effectiveShiftCount = 2; // Day shift (morning + afternoon) = 2 shifts
   }
 
-  // If not current month, return full price
-  if (month !== currentMonth || year !== currentYear) {
+  const isCurrentMonth = month === currentMonth && year === currentYear;
+
+  // If not current month or booking on/before 10th, return full price
+  if (!isCurrentMonth || today <= 10) {
     return effectiveShiftCount * SHIFT_PRICE_INR;
   }
 
-  // Calculate remaining days in current month
-  const today = now.getDate();
+  // Calculate remaining days in current month (only after the 10th)
   const daysInMonth = new Date(year, month, 0).getDate(); // Last day of month
   const remainingDays = daysInMonth - today + 1; // Include today
 
@@ -129,9 +131,11 @@ export const createOrder = async (req, res) => {
 
     // Check if this is current month for pro-rated info
     const now = new Date();
+    const currentDay = now.getDate();
     const isCurrentMonth = monthNum === (now.getMonth() + 1) && yearNum === now.getFullYear();
+    const shouldProRate = isCurrentMonth && currentDay > 10;
     const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
-    const remainingDays = isCurrentMonth ? (daysInMonth - now.getDate() + 1) : daysInMonth;
+    const remainingDays = shouldProRate ? (daysInMonth - currentDay + 1) : null;
 
     return res.status(200).json({
       success: true,
@@ -143,8 +147,8 @@ export const createOrder = async (req, res) => {
       seatNumber,
       shiftTypes,
       month: monthNum,
-      isProRated: isCurrentMonth,
-      remainingDays: isCurrentMonth ? remainingDays : null,
+      isProRated: shouldProRate,
+      remainingDays,
       pricePerShift: amountINR / shiftTypes.length,
       year: yearNum,
       monthLabel: `${monthNames[monthNum - 1]} ${yearNum}`,
@@ -371,16 +375,18 @@ export const getPrice = async (req, res) => {
     const fullPrice = effectiveShiftCount * SHIFT_PRICE_INR;
 
     const now = new Date();
+    const currentDay = now.getDate();
     const isCurrentMonth = monthNum === (now.getMonth() + 1) && yearNum === now.getFullYear();
+    const shouldProRate = isCurrentMonth && currentDay > 10;
     const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
-    const remainingDays = isCurrentMonth ? (daysInMonth - now.getDate() + 1) : daysInMonth;
+    const remainingDays = shouldProRate ? (daysInMonth - currentDay + 1) : null;
 
     return res.status(200).json({
       success: true,
       totalPrice,
       fullPrice,
-      isProRated: isCurrentMonth,
-      remainingDays: isCurrentMonth ? remainingDays : null,
+      isProRated: shouldProRate,
+      remainingDays,
       daysInMonth,
       pricePerShift: totalPrice / shifts,
       savings: fullPrice - totalPrice,
