@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema(
     isAdmin: { type: Boolean, default: false },
 
     // Google OAuth fields
-    googleId: { type: String, unique: true, sparse: true, default: null },
+    googleId: { type: String, sparse: true, default: null },
     authProvider: { type: String, enum: ["local", "google"], default: "local" },
     profileCompleted: { type: Boolean, default: true }, // false for new OAuth users until they set username/mobile
     bio: { type: String, default: "No bio available" },
