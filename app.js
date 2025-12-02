@@ -37,6 +37,8 @@ const allowedOrigins = [
   "http://localhost:5173", // local dev
   "https://shai-library.vercel.app", // deployed frontend
   "https://sai-library.vercel.app", // deployed frontend
+  "https://www.sailibrary.online",
+  "https://sailibrary.online/"
 ];
 
 // Setup Socket.IO
