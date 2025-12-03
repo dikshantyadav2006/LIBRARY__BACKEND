@@ -59,6 +59,12 @@ io.on("connection", (socket) => {
 });
 
 // Middleware
+app.use(express.static("dist", {
+  maxAge: "1y",       // 1 year cache
+  immutable: true,    // File change nahi hoti until build changes
+  etag: false,
+}));
+
 app.use(express.json());
 app.use(
   cors({
