@@ -6,7 +6,7 @@ import Booking from "../models/Booking.js";
 import ProtectedSeat from "../models/ProtectedSeat.js";
 import { areShiftsAvailable } from "../services/seatAvailabilityService.js";
 
-const SHIFT_PRICE_INR = 300; // ₹300 per shift (full month)
+const SHIFT_PRICE_INR = 250; // ₹250 per shift (full month)
 const MIN_PRICE_INR = 50; // Minimum price ₹50
 const CURRENCY = "INR";
 
