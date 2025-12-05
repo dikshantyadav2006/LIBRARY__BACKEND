@@ -15,7 +15,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 // ✅ Fetch user data using ID from cookie
 router.get("/userdata", verifyUser, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password -profilePic -__v"); // Exclude password and profilePic fields
+    const user = await User.findById(req.user.id).select("-password -__v"); // Exclude password and profilePic fields
     // console.log(user); // Exclude password field
     if (!user) {
       return res.status(404).json({ message: "User not found" });

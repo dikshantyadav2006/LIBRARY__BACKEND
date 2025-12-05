@@ -42,10 +42,8 @@ const userSchema = new mongoose.Schema(
         loginAttempts: { type: Number, default: 0 },
       },
     ],
-    profilePic: {
-      data: Buffer, // Store image as binary data
-      contentType: String, // Store image type (jpeg, png, etc.)
-    },
+    // Cloudinary-hosted profile picture URL
+    profilePic: { type: String, default: null },
 
     gender: {
       type: String,

@@ -1,6 +1,7 @@
 import express from "express";
 import upload from "../middleware/multerConfig.js"; // Import multer
 import User from "../models/User.js"; // Import User model
+import cloudinary from "../config/cloudinary.js";
 
 const router = express.Router();
 
@@ -14,21 +15,23 @@ router.post("/upload-profile/:userId", upload.single("profilePic"), async (req, 
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    // Convert the image to Buffer
-    const profilePic = {
-      data: req.file.buffer,
-      contentType: req.file.mimetype,
-    };
+    // Upload to Cloudinary instead of saving buffer
+    const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
-    // Update user with new profile picture
+    const result = await cloudinary.uploader.upload(dataUri, {
+      folder: "shai_library/profile_pics",
+      resource_type: "image",
+      unique_filename: true,
+      overwrite: true,
+    });
+
+    const profilePic = result.secure_url || result.url;
+
+    // Update user with Cloudinary URL
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { profilePic,
-        showProfilePicture: true 
-       },
-      
+      { profilePic, showProfilePicture: true },
       { new: true }
-
     );
 
     if (!updatedUser) {
@@ -58,14 +61,12 @@ router.get("/profile-pic/:userId", async (req, res) => {
       return res.status(403).json({ message: "Profile picture is hidden by the user" });
     }
 
-    // ✅ Check if profilePic exists
-    if (!user.profilePic || !user.profilePic.data) {
+    // Return the Cloudinary URL in JSON so clients can consume it directly
+    if (!user.profilePic) {
       return res.status(404).json({ message: "Profile picture not found" });
     }
 
-    // ✅ Set correct content type and send image data
-    res.set("Content-Type", user.profilePic.contentType);
-    res.send(user.profilePic.data);
+    return res.status(200).json({ profilePic: user.profilePic });
   } catch (error) {
     console.error("Error fetching profile picture:", error);
     res.status(500).json({ message: "Server error", error: error.message });
