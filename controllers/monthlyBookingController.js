@@ -128,7 +128,7 @@ export const getAvailableMonths = async (req, res) => {
     const currentYear = now.getFullYear();
 
     const months = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       let month = currentMonth + i;
       let year = currentYear;
 
