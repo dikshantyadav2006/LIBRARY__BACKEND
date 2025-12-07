@@ -87,3 +87,36 @@ export const unblockSeat = async (req, res) => {
     return res.status(500).json({ message: error.message || "Error unblocking seat" });
   }
 };
+
+
+
+// Search users by Partial Match (fullname, username, mobile, gmail, address)
+export const searchUsers = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query || query.trim() === "") {
+      return res.json([]); // empty search → no result
+    }
+
+    const searchTerm = new RegExp(query, "i"); // case-insensitive
+
+    const users = await User.find(
+      {
+        $or: [
+          { fullname: { $regex: searchTerm } },
+          { username: { $regex: searchTerm } },
+          { mobile: { $regex: searchTerm } },
+          { gmail: { $regex: searchTerm } },
+          { address: { $regex: searchTerm } },
+        ],
+      },
+      "fullname username mobile gmail address" // return only needed fields
+    ).limit(50);
+
+    res.json(users);
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};

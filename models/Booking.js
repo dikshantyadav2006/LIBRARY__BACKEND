@@ -26,7 +26,10 @@ const bookingSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
 
     // Payment reference
-    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", required: true },
+    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment", required: false },
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+
 
     // When booking was created
     bookedAt: { type: Date, default: Date.now },
