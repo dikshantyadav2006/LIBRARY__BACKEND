@@ -14,6 +14,7 @@ import configurePassport from "./config/passport.js";
 
 // Routes
 import authRoutes from "./routes/auth.js";
+import blogs from "./routes/blogs.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import seatRoutes from "./routes/seatRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
@@ -92,6 +93,8 @@ app.use("/user", userRoutes);
 app.use("/feedback", feedbackRoutes);
 app.use("/payment", paymentRoutes);
 app.use("/monthly-booking", monthlyBookingRoutes);
+app.use("/blogs", blogs);
+
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGO_URI;
