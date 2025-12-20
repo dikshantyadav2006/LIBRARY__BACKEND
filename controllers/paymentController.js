@@ -20,6 +20,13 @@ const getRazorpayInstance = () => {
 
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
 };
+const getFloorAndSeat = (seatNumber) => {
+  if (seatNumber <= 25) {
+    return { floor: "F1", finalSeat: seatNumber };
+  }
+  return { floor: "F2", finalSeat: seatNumber - 25 };
+};
+
 
 // Calculate pro-rated price for current month based on remaining days
 // Special handling: Day+Night combo on Floor 1 = ₹600 (Night is free)
@@ -99,14 +106,16 @@ export const createOrder = async (req, res) => {
     const amountInPaise = amountINR * 100; // Razorpay uses paise
 
     const razorpay = getRazorpayInstance();
+    const { floor, finalSeat } = getFloorAndSeat(seatNumber);
+    const receipt = `seat-${finalSeat}-${floor}-${monthNum}-${yearNum}`;
 
     const order = await razorpay.orders.create({
       amount: amountInPaise,
       currency: CURRENCY,
-      receipt: `seat-${seatNumber}-${monthNum}-${yearNum}-${Date.now()}`,
+      receipt,
     });
 
-    const productId = `seat-${seatNumber}-${shiftTypes.join("-")}-${monthNum}-${yearNum}`;
+    const productId = `${floor}-${finalSeat}-${shiftTypes.join("-")}-${monthNum}-${yearNum}`;
 
     const payment = new Payment({
       user: userId,
